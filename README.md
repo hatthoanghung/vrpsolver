@@ -1,7 +1,7 @@
 WORK IN PROGRESS
 # Vehicle routing problem solver
 
-VRPSolver is a simple vehicle routing optimization HTML5 web-based app written in Python.
+VRPSolver is a simple vehicle routing optimization web-based app written in JavaScript and Python.
 
 ![](https://github.com/kenny-goh/vrpsolver/blob/master/vrpsolver_screenshot.png)
 
