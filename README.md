@@ -3,6 +3,8 @@ WORK IN PROGRESS
 
 VRPSolver is a simple vehicle routing optimization app written in Python.
 
+![Alt text](http://full/path/to/img.jpg "Optional title")
+
 ### Version
 0.1
 
