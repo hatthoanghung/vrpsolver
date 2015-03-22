@@ -24,6 +24,8 @@ VRPSolver uses a number of open source projects to work properly:
 
  - Write Tests
  - Refactor the optimizer
+ - Refactor the app.js
+ - Decompose the javascript...
 
 License
 ----
