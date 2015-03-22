@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+{% load staticfiles %}
+<html>
+<head lang="en">
+    <title></title>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="icon" href="../../favicon.ico">
+
+    <title>Vehicle Routing Solver Demo</title>
+    <!-- Bootstrap core CSS -->
+    <link href="{% static "css/bootstrap.min.css" %}"%}" rel="stylesheet"/>
+    <!--<link href="{% static "css/ui-grid.css"%}" rel="styleSheet"/>-->
+    <link href="//ui-grid.info/release/ui-grid-unstable.min.css" rel="stylesheet" />
+    <link href="{% static "css/splitter.css"%}" rel="styleSheet"/>
+    <link href="{% static "css/app.css"%}" rel="styleSheet"/>
+</head>
+
+<body>
+<nav class="navbar navbar-default">
+    <div class="container-fluid">
+        <div class="navbar-header">
+            <a class="navbar-brand" href="#">Vehicle Routing Solver Demo</a>
+        </div>
+    </div>
+</nav>
+
+<div ng-app="app">
+
+    <div style="margin-left:10px; margin-bottom:10px;">
+        Dataset:&nbsp;
+        <select id="datasetSelection"
+                style="height:1.7em;width:12.0em;"
+                ng-controller="DatasetController"
+                ng-change="selectionChanged()"
+                ng-model="currentValue">
+            {% for each in datasets %}
+                <option value="{{ each.pk }}" selected>{{ each.name }} </option>
+            {% endfor %}
+        </select>
+    </div>
+
+{% verbatim %}
+
+    <div id="tabs"
+         ng-controller="TabsControl as tabControl">
+        <ul class="nav nav-tabs">
+          <li role="presentation"
+              ng-repeat="tab in tabControl.tabs"
+              ng-class="{ active: tabControl.isActiveTab(tab.url)}"
+              ng-click="tabControl.onClickTab(tab)"><a href="#">{{tab.title}}</a></li>
+        </ul>
+        <div id="mainView">
+            <div ng-include="currentTab"></div>
+        </div>
+    </div>
+
+    <!-- Workaround: Directive 'orders' does not work if its the initial tab.
+        Pasted the entire orders html here as temporary workaround -->
+    <script type="text/ng-template"
+            id="one.tpl.html">
+        <div id="viewOne"
+             style="margin-top:10px; margin-left: 10px;">
+            <div class="panel panel-default">
+                    <div class="panel-heading">Orders</div>
+                    <div ng-controller="OrderListControl">
+                        <div id="grid1"
+                             ui-grid="gridOptions"
+                             ui-grid-selection
+                             class="grid">
+                        </div>
+                    </div>
+                    <form style="margin-top:10px;margin-left:10px;margin-bottom:10px"
+                         ng-controller="UploadController"
+                         uploader="uploader"
+                         class="form-horizontal">
+                        <div class="form-group">
+                            <input type="file"
+                                   nv-file-select=""
+                                   uploader="uploader"
+                                    class="col-sm-3"/>
+                        </div>
+                    </form>
+
+            </div>
+            <div class="panel panel-default">
+                <div class="panel-heading">Parameters</div>
+                <form class="form-horizontal" role="form" style="margin-top:10px;">
+                        <div class="form-group">
+                          <label for="inputName3"
+                                 class="col-sm-1 control-label">Vehicle capacity</label>
+                            <div class="col-sm-2">
+                            <input class="form-control" id="inputName3" placeholder="200">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="inputEmail3"
+                                   class="col-sm-1 control-label">Max vehicles</label>
+                            <div class="col-sm-2">
+                            <input class="form-control" id="inputEmail3" placeholder="20">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="col-sm-offset-1 col-sm-10">
+                                <button type="submit"
+                                        class="btn btn-default">Save</button>
+                            </div>
+                        </div>
+                </form>
+            </div>
+        </div>
+    </script>
+
+    <script type="text/ng-template" id="three.tpl.html">
+    <div id="viewThree">
+        <div style="margin-top:10px; margin-left: 25px;"
+             ng-controller="SolverControl">
+            <table>
+                <tr>
+                    <td>
+                        <div class="btn-group" role="group"  role="toolbar">
+                            <button type="button"
+                                    ng-disabled="solver_running"
+                                    ng-model="button"
+                                    ng-click="startClicked()"
+                                    class="btn btn-default">
+                                <span class="glyphicon glyphicon-triangle-right"
+                                      aria-hidden="true"></span>
+                                Start
+                            </button>
+                            <button type="button"
+                                    ng-disabled="!solver_running"
+                                    ng-model="button"
+                                    ng-click="stopClicked()"
+                                    class="btn btn-default">
+                                <span class="glyphicon glyphicon-stop"
+                                      aria-hidden="true"></span>
+                                Stop
+                            </button>
+                        </div>
+                    </td>
+                    <td style="padding: 10px" />
+                    <td>
+                        <div ng-show="solver_running"><img src="/static/img/loading.gif"><b>Solving.. {{progress | number: 0}} % done</b></div>
+                    </td>
+                    <td>
+                        <div ng-show="pending"><b>Solver is waiting to start. Distributed task manager has not been started. </b></div>
+                    </td>
+                     <td>
+                        <div ng-show="failure"><b>Oops...Solver has failed. Please see system administrator.</b></div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div class="container-fluid" style="margin-top:10px; margin-left:10px; width: 920px;">
+            <div class="row">
+                <div class="col-sm-6">
+                    <div class="panel panel-default">
+                        <div class="panel-heading"><h3 class="panel-title">KPI</h3></div>
+                        <div class="panel-body">
+                            <div class="container-fluid">
+                                <div class="row">
+                                    <div class="col-sm-6">
+                                        <canvas id="mygauge1"
+                                                style="background-color: white"
+                                                class="gauge"
+                                                width="130"
+                                                height="100">
+                                            Your browser does not support the HTML5 canvas tag.
+                                        </canvas>
+                                        <div>Distance:</div>
+                                        <div id="preview-textfield1"></div>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <canvas id="mygauge2"
+                                                style="background-color: white"
+                                                class="gauge"
+                                                width="130"
+                                                height="100">
+                                            Your browser does not support the HTML5 canvas tag.
+                                        </canvas>
+                                        <div>Total trucks:</div>
+                                        <div id="preview-textfield2"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="panel panel-default">
+                        <div class="panel-heading"><h3 class="panel-title" >Score versus time</h3></div>
+                        <div class="panel-body">
+                            <div id="scoreChart"
+                                    width="100px"
+                                    height="140">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel panel-default"
+             style="margin-top:5px; margin-left:25px; width: 900px;">
+            <div class="panel-heading"><h3 class="panel-title" >Map</h3></div>
+            <div class="panel-body"
+                 style="background-image: url(/static/img/fake_map2.png);background-size:100% 100%;">
+                <!--
+                <div id="map" style="height:100%"></div>
+                -->
+                <canvas id="map"
+                        height="400px"
+                        width="870px"
+                        class="map">
+                Your browser does not support the HTML5 canvas tag.
+            </canvas>
+            </div>
+        </div>
+    </div>
+    </script>
+
+
+    <script type="text/ng-template" id="four.tpl.html">
+        <div id="viewFour">
+            <div ng-controller="ResultListControl">
+                <div id="grid1" ui-grid="gridOptions"  ui-grid-selection  class="grid"></div>
+                <div style="margin-top:10px;margin-left:10px">
+                <button 
+                        ng-click="deleteClicked()"
+                        ng-model="button"
+                        ng-disabled="!selection"
+                        class="btn btn-default">Delete</button>
+                <button 
+                        ng-click="rollOut()"
+                        ng-model="button"
+                        ng-disabled="!selection"
+                        class="btn btn-default">Roll out</button>
+                </div>
+            </div>
+        </div>
+        </div>
+    </script>
+
+    <script type="text/ng-template" id="five.tpl.html">
+        <div id=viewFive"
+             ng-controller="PlanBoardControl"
+             style="container-fluid">
+                <br>
+                <div class="col-sm-8">
+                        <div class="panel panel-default">
+                            <div class="panel-heading">Customers</div>
+                            <div id="planBoardOrderGrid"
+                                 ui-grid="orderGridOptions"
+                                 ui-grid-selection
+                                 class="grid"></div>
+                            <div style="margin-top:10px; margin-bottom:10px; margin-left:10px;">
+                                <button 
+                                        ng-click="planOrderNodeOnSelectedRoute()"
+                                        ng-model="button"
+                                        ng-disabled="!(route_selection && orders_selection)
+                                        class="btn btn-default">
+                                    <span class="glyphicon glyphicon-arrow-down"
+                                          aria-hidden="true"></span> Plan on selected route
+                                </button>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-5">
+                                <div class="panel panel-default">
+                                    <div class="panel-heading">Routes</div>
+                                    <div id="planBoardRouteGrid"
+                                         ui-grid="routeGridOptions"
+                                         ui-grid-selection
+                                         class="grid"></div>
+                                    <div style="margin-top:10px;margin-bottom:10px; margin-left:10px;">
+                                        <button ng-click=""
+                                                ng-disabled=""
+                                                class="btn btn-default">
+                                            <span class="glyphicon glyphicon-random"
+                                                  aria-hidden="true"></span> Optimize
+                                        </button>
+                                          <button ng-click=""
+                                                 ng-disabled=""
+                                                 class="btn btn-default">
+                                            <span class="glyphicon glyphicon-remove"
+                                                  aria-hidden="true"></span> Unplan
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div  class="col-sm-7">
+                                <div class="panel panel-default">
+                                     <div class="panel-heading">Actions</div>
+                                     <div id="planBoardTransitionGrid"
+                                          ui-grid="actionGridOptions"
+                                          ui-grid-selection  class="grid"></div>
+                                     <div style="margin-top:10px; margin-bottom:10px;  margin-left:10px;">
+                                        <button
+                                                ng-click="moveActionUp()"
+                                                ng-model="button"
+                                                ng-disabled="!canMoveUpAction()"
+                                                class="btn btn-default">
+                                           <span class="glyphicon glyphicon-chevron-up"
+                                                 aria-hidden="true"></span> Move up
+                                        </button>
+                                        <button
+                                                ng-click="moveActionDown()"
+                                                ng-model="button"
+                                                ng-disabled="!canMoveDownAction()"
+                                                class="btn btn-default">
+                                           <span class="glyphicon glyphicon-chevron-down"
+                                                 aria-hidden="true"></span> Move down
+                                        </button>
+
+                                        <button
+                                                ng-click="removeAction()"
+                                                ng-model="button"
+                                                ng-disabled="!canRemoveAction()"
+                                                class="btn btn-default">
+                                           <span class="glyphicon glyphicon-remove"
+                                                 aria-hidden="true"></span> Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                </div>
+                <div class="col-sm-4">
+                    <div class="panel panel-default">
+                        <div class="panel-heading">KPI</div>
+                          <div class="row" style="margin-left:10px">
+                              <div class="col-sm-3">
+                                  <canvas id="planBoardScoreGauge"
+                                        style="background-color: white"
+                                        class="gauge"
+                                        width="130"
+                                        height="100">
+                                    Your browser does not support the HTML5 canvas tag.
+                                 </canvas>
+                                  <div>Total score:</div>
+                                  <div id="preview_score"></div>
+                              </div>
+                              <div class="col-sm-3">
+                                  <canvas id="planBoardOrderGauge"
+                                        style="background-color: white"
+                                        class="gauge"
+                                        width="130"
+                                        height="100">
+                                    Your browser does not support the HTML5 canvas tag.
+                                 </canvas>
+                                  <div>Orders planned:</div>
+                                  <div id="preview_orders_planned"></div>
+                              </div>
+                          </div>
+                    </div>
+                    <div class="panel panel-default">
+                        <div class="panel-heading">Map</div>
+                        <div style="background-image: url(/static/img/fake_map2.png);background-size:100% 100%;">
+                             <canvas id="map2"
+                                     height="400px"
+                                     width="400px"
+                                     class="map">1
+                                 Your browser does not support the HTML5 canvas tag.
+                            </canvas>
+                        </div>
+                    </div>
+                </div>
+        </div>
+    </script>
+
+
+</div>
+
+
+
+{% endverbatim %}
+
+<!-- Bootstrap core JavaScript
+================================================== -->
+<!-- Placed at the end of the document so the pages load faster -->
+<script src="{% static "js/d3.min.js" %}"></script>
+<script src="{% static "js/jquery-2.1.3.js" %}"></script>
+<script src="{% static "js/bootstrap.min.js" %}"></script>
+<script src="{% static "js/angular.js" %}"></script>
+<script src="{% static "js/angular-animate.js" %}"></script>
+<script src="{% static "js/angular-file-upload.js" %}"></script>
+<script src="{% static "js/gauge.min.js" %}"></script>
+<script src="{% static "js/ui-grid.js" %}"></script>
+<script src="{% static "js/moment.js" %}"></script>
+<script src="{% static "js/app.js" %}"></script>
+
+<!--
+<script src="http://openlayers.org/api/OpenLayers.js"></script>
+<script src="http://mapstraction.com/mxn/build/latest/mxn.js?(openlayers)" type="text/javascript"></script>
+-->
+
+
+</body>
+</html>
